@@ -16,6 +16,8 @@
 module Graphics.X11.Xlib.Misc(
 
         rmInitialize,
+        rmGetStringDatabase,
+        rmGetResource,
         autoRepeatOff,
         autoRepeatOn,
         bell,
@@ -186,7 +188,7 @@ import Graphics.X11.Xlib.Event
 import Graphics.X11.Xlib.Font
 import Graphics.X11.Xlib.Internal
 
-import Foreign (Storable, Ptr, alloca, peek, throwIfNull, with, withArrayLen, allocaBytes, pokeByteOff, withArray, FunPtr, nullPtr, Word32, peekArray)
+import Foreign (Storable(..), Ptr, alloca, peek, throwIfNull, with, withArrayLen, allocaBytes, pokeByteOff, withArray, FunPtr, nullPtr, Word32, peekArray)
 import Foreign.C
 
 import System.IO.Unsafe
@@ -203,6 +205,51 @@ import Data.Data
 -- | interface to the X11 library function @XrmInitialize()@.
 foreign import ccall unsafe "HsXlib.h XrmInitialize"
         rmInitialize :: IO ()
+
+newtype RmDatabase = RmDatabase (Ptr RmDatabase)
+  deriving (Eq, Ord, Show)
+
+rmGetStringDatabase :: String -> IO RmDatabase
+rmGetStringDatabase str = do
+  withCString str $ \c_str -> do
+    RmDatabase <$> xrmGetStringDatabase c_str
+
+foreign import ccall safe "HsXlib.h XrmGetStringDatabase"
+        xrmGetStringDatabase :: CString -> IO (Ptr RmDatabase)
+
+data RmValue = RmValue
+  { rmValue_size :: CUInt,
+    rmValue_addr :: CString
+    }
+  deriving (Eq, Ord, Show, Typeable)
+
+instance Storable RmValue where
+        sizeOf _ = #size XrmValue
+        alignment _ = alignment (undefined::CInt)
+        peek p = do
+                size <- #{peek XrmValue, size} p
+                addr <- #{peek XrmValue, addr} p
+                return $ RmValue {
+                        rmValue_size = size,
+                        rmValue_addr = addr
+                        }
+        poke p rmValue = do
+                #{poke XrmValue, size} p $ rmValue_size rmValue
+                #{poke XrmValue, addr} p $ rmValue_addr rmValue
+
+rmGetResource :: RmDatabase -> String -> IO (Maybe String)
+rmGetResource (RmDatabase database) strName = do
+  withCString strName $ \str_name -> do
+  alloca $ \null_ptr -> do
+  alloca $ \value_return -> do
+    doesExist <- xrmGetResource database str_name nullPtr null_ptr value_return
+    if doesExist then
+        fmap Just . peekCString . rmValue_addr =<< peek value_return
+      else
+        pure Nothing
+
+foreign import ccall unsafe "HsXlib.h XrmGetResource"
+        xrmGetResource :: Ptr RmDatabase -> CString -> CString -> Ptr CString -> Ptr RmValue -> IO Bool
 
 -- %fun XGetDefault :: Display -> String -> String -> IO ()
 
