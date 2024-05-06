@@ -419,7 +419,7 @@ newtype FdSet = FdSet (Ptr FdSet)
 foreign import ccall unsafe "HsXlib.h" fdZero :: Ptr FdSet -> IO ()
 foreign import ccall unsafe "HsXlib.h" fdSet :: CInt -> Ptr FdSet -> IO ()
 
-foreign import ccall unsafe "HsXlib.h" select ::
+foreign import ccall safe "HsXlib.h" select ::
         CInt -> Ptr FdSet -> Ptr FdSet -> Ptr FdSet -> Ptr TimeVal -> IO CInt
 
 -- | This function is somewhat compatible with Win32's @TimeGetTime()@
